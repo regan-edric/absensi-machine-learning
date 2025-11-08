@@ -34,4 +34,5 @@ lakukan di Terminal VS Code di Folder FrontEnd:
 
 lakukan di Terminal VS Code di luar Folder FrontEnd dan Backend:
 
-1. Nn8n start
+1. npm install n8n -g
+1. n8n start
