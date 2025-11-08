@@ -1,16 +1,37 @@
-# React + Vite
+Tugas Machine Learning
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplikasi Deteksi Wajah untuk Absensi berbasis Website
 
-Currently, two official plugins are available:
+Aplikasi ini dirancang untuk memudahkan pekerjaan dosen dalam absensi dan mencegah mahasiswa untuk titip absen
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+teknologi / tech stack yang digunakan:
+React -> Front End -> Javascript
+Flask -> Backend -> Python
+PostgreSQL -> Database
+N8N -> Webhook untuk Otomasi Whatsapp Message/Notification
+Fonnte -> Whatsapp API yang dipakai
+HOG (Histogram of Oritented Gradients) -> Model ML yang dipakai
 
-## React Compiler
+Anggota:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. 221110891 - Regan Edric Onggatta
+2. 221111448 - Calvin Winata
+3. 221110951 - Kelvin Sunliyanto
 
-## Expanding the ESLint configuration
+Cara Installasi:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+lakukan di Terminal VS Code di Folder Backend:
+
+1. py -3.11 -m venv venv
+2. venv\scripts\activate
+3. pip install flask flask-cors psycopg2-binary dlib face-recognition face-recognition-models opencv-python numpy pillow python-dotenv requests cmake
+4. python app.py
+
+lakukan di Terminal VS Code di Folder FrontEnd:
+
+1. npm install
+2. npm run dev
+
+lakukan di Terminal VS Code di luar Folder FrontEnd dan Backend:
+
+1. Nn8n start
