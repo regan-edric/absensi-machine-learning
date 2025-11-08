@@ -36,3 +36,6 @@ lakukan di Terminal VS Code di luar Folder FrontEnd dan Backend:
 
 1. npm install n8n -g
 1. n8n start
+
+Link Onedrive: https://mikroskilacid-my.sharepoint.com/:f:/g/personal/221110891_students_mikroskil_ac_id/Ev1eAKgv2IVOkcaWMQFJ-_IBLP6sH-o0N2tECjKgLA0g9A?e=zTRO2w
+Link Youtube: https://youtu.be/3aDKq64J3es
