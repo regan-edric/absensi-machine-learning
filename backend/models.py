@@ -119,7 +119,6 @@ class FaceEncodingModel:
     
     def save_encoding(self, user_id, encoding):
         try:
-            # Serialize encoding using pickle
             encoding_bytes = pickle.dumps(encoding)
             query = """
                 INSERT INTO face_encodings (user_id, encoding) 
@@ -129,7 +128,7 @@ class FaceEncodingModel:
             cursor = self.db.connection.cursor()
             cursor.execute(query, (user_id, encoding_bytes))
             result = cursor.fetchone()
-            self.db.connection.commit()  # ← TAMBAHKAN INI!
+            self.db.connection.commit()
             cursor.close()
             
             if result:
@@ -151,7 +150,6 @@ class FaceEncodingModel:
         """
         results = self.db.execute_query(query, fetch=True)
         
-        # Deserialize encodings
         for result in results:
             result['encoding'] = pickle.loads(result['encoding'])
         
@@ -170,22 +168,28 @@ class AttendanceModel:
     def __init__(self, db):
         self.db = db
     
-    def record_attendance(self, user_id, confidence_score, status='hadir'):
-        # Convert numpy types to Python native types
+    def record_attendance(self, user_id, confidence_score, status='hadir', mood=None, mood_confidence=None, mood_emoji=None):
+        """Record attendance with mood tracking"""
         if hasattr(confidence_score, 'item'):
-            confidence_score = confidence_score.item()  # numpy to python
+            confidence_score = confidence_score.item()
         else:
             confidence_score = float(confidence_score)
         
+        if mood_confidence is not None:
+            if hasattr(mood_confidence, 'item'):
+                mood_confidence = mood_confidence.item()
+            else:
+                mood_confidence = float(mood_confidence)
+        
         query = """
-            INSERT INTO attendance (user_id, confidence_score, status, timestamp)
-            VALUES (%s, %s, %s, %s)
-            RETURNING id, user_id, timestamp, confidence_score, status
+            INSERT INTO attendance (user_id, confidence_score, status, timestamp, mood, mood_confidence, mood_emoji)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id, user_id, timestamp, confidence_score, status, mood, mood_confidence, mood_emoji
         """
         timestamp = datetime.now()
         result = self.db.execute_query(
             query, 
-            (user_id, confidence_score, status, timestamp), 
+            (user_id, confidence_score, status, timestamp, mood, mood_confidence, mood_emoji), 
             fetch=True
         )
         return result[0] if result else None

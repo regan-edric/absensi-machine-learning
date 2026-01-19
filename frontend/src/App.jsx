@@ -1,9 +1,9 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
-import Home from "./components/Home";
-import Register from "./components/Register";
-import Attendance from "./components/Attedance";
+import Home from "./components/Home.jsx";
+import Register from "./components/Register_Updated.jsx";
+import Attendance from "./components/Attedance.jsx";
 
 function App() {
   return (

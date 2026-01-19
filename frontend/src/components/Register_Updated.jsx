@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import Camera from "./Camera";
+import VideoRegistration from "./VideoRegistration";
 import { registerUser, checkNIM, getUsers, deleteUser } from "../services/api";
 import toast from "react-hot-toast";
 
@@ -9,11 +9,9 @@ const Register = () => {
   const [registeredUsers, setRegisteredUsers] = useState([]);
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({ nama: "", nim: "" });
-  const [capturedImages, setCapturedImages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [showCamera, setShowCamera] = useState(false);
-
-  const MIN_PHOTOS = 10;
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [processingStage, setProcessingStage] = useState("");
 
   useEffect(() => {
     fetchRegisteredUsers();
@@ -48,7 +46,6 @@ const Register = () => {
       }
 
       setStep(2);
-      setShowCamera(true);
     } catch (error) {
       toast.error("Gagal memeriksa NIM: ", error);
     } finally {
@@ -56,37 +53,143 @@ const Register = () => {
     }
   };
 
-  const handleCapture = (imageSrc) => {
-    setCapturedImages([...capturedImages, imageSrc]);
-    toast.success(`Foto ${capturedImages.length + 1} berhasil diambil`);
+  const simulateProgress = (duration) => {
+    /**
+     * Simulate progress for better UX
+     * Even if backend is processing, show user something is happening
+     */
+    return new Promise((resolve) => {
+      const steps = 20;
+      const interval = duration / steps;
+      let current = 0;
+
+      const timer = setInterval(() => {
+        current += 5;
+        setUploadProgress(Math.min(current, 95)); // Stop at 95%, finish when done
+
+        // Update stage messages
+        if (current < 30) {
+          setProcessingStage("Mengupload gambar...");
+        } else if (current < 60) {
+          setProcessingStage("Memproses wajah...");
+        } else if (current < 90) {
+          setProcessingStage("Menyimpan data...");
+        } else {
+          setProcessingStage("Hampir selesai...");
+        }
+
+        if (current >= 95) {
+          clearInterval(timer);
+          resolve();
+        }
+      }, interval);
+    });
   };
 
-  const handleRemoveImage = (index) => {
-    setCapturedImages(capturedImages.filter((_, i) => i !== index));
-    toast.success("Foto dihapus");
-  };
-
-  const handleSubmit = async () => {
-    if (capturedImages.length < MIN_PHOTOS) {
-      toast.error(`Minimal ${MIN_PHOTOS} foto diperlukan`);
-      return;
-    }
+  const handleVideoComplete = async (capturedFrames) => {
+    console.log("🎬 Video capture complete, frames:", capturedFrames.length);
 
     try {
       setIsLoading(true);
-      await registerUser(formData.nama, formData.nim, capturedImages);
+      setUploadProgress(0);
+      setProcessingStage("Memulai...");
 
-      toast.success("Registrasi berhasil!");
+      // Start progress simulation
+      const progressPromise = simulateProgress(3000);
 
-      setFormData({ nama: "", nim: "" });
-      setCapturedImages([]);
-      setStep(1);
-      setShowCamera(false);
-      fetchRegisteredUsers();
+      console.log("📤 Sending registration request...");
+      console.log("Data:", {
+        nama: formData.nama,
+        nim: formData.nim,
+        images: capturedFrames.length,
+      });
+
+      // Start actual registration
+      const registerPromise = registerUser(
+        formData.nama,
+        formData.nim,
+        capturedFrames,
+      );
+
+      // Wait for both
+      const [, result] = await Promise.all([progressPromise, registerPromise]);
+
+      console.log("✅ Registration response:", result);
+
+      // Complete progress
+      setUploadProgress(100);
+      setProcessingStage("Selesai!");
+
+      // Small delay to show 100%
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // SUCCESS - Check both old and new response format
+      if (result.success || result.message === "Registrasi berhasil") {
+        toast.success("🎉 Registrasi berhasil!", {
+          duration: 3000,
+        });
+
+        console.log("🔄 Resetting form and refreshing users...");
+
+        // Reset form
+        setFormData({ nama: "", nim: "" });
+        setStep(1);
+        setUploadProgress(0);
+        setProcessingStage("");
+
+        // Refresh user list
+        await fetchRegisteredUsers();
+
+        console.log("✅ All done!");
+      } else {
+        // Should not reach here if backend returns 201
+        console.warn("⚠️ Unexpected response format:", result);
+        toast.error(result.error || "Response tidak sesuai format");
+      }
     } catch (error) {
-      const errorMessage =
-        error.response?.data?.error || "Gagal melakukan registrasi";
-      toast.error(errorMessage);
+      console.error("❌ Registration error:", error);
+      console.error("Error details:", {
+        response: error.response,
+        data: error.response?.data,
+        status: error.response?.status,
+        message: error.message,
+      });
+
+      // Better error handling
+      let errorMessage = "Gagal melakukan registrasi";
+
+      if (error.response) {
+        // Server responded with error status
+        const status = error.response.status;
+        const data = error.response.data;
+
+        console.log("Server error response:", { status, data });
+
+        if (data?.error) {
+          errorMessage = data.error;
+        } else if (data?.message) {
+          errorMessage = data.message;
+        } else if (status === 400) {
+          errorMessage = "Data tidak valid. Periksa kembali input Anda.";
+        } else if (status === 500) {
+          errorMessage = "Terjadi kesalahan server. Silakan coba lagi.";
+        }
+      } else if (error.request) {
+        // Request made but no response
+        console.error("No response from server");
+        errorMessage = "Tidak dapat terhubung ke server. Periksa koneksi Anda.";
+      } else {
+        // Error in request setup
+        console.error("Request setup error:", error.message);
+        errorMessage = error.message || "Terjadi kesalahan tidak terduga";
+      }
+
+      toast.error(errorMessage, {
+        duration: 5000,
+      });
+
+      setUploadProgress(0);
+      setProcessingStage("");
     } finally {
       setIsLoading(false);
     }
@@ -94,8 +197,6 @@ const Register = () => {
 
   const handleBack = () => {
     setStep(1);
-    setShowCamera(false);
-    setCapturedImages([]);
   };
 
   const handleDeleteUser = async (userId, userName) => {
@@ -243,6 +344,63 @@ const Register = () => {
           {/* Right: Registration Form */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-xl shadow-lg p-6 md:p-8">
+              {/* Loading Overlay */}
+              {isLoading && uploadProgress > 0 && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                  <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
+                    <div className="text-center mb-6">
+                      <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+                        <svg
+                          className="w-8 h-8 text-green-600 animate-spin"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                      </div>
+                      <h3 className="text-xl font-bold text-gray-800 mb-2">
+                        {processingStage}
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        Mohon tunggu sebentar...
+                      </p>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="relative">
+                      <div className="overflow-hidden h-3 text-xs flex rounded-full bg-gray-200">
+                        <div
+                          style={{ width: `${uploadProgress}%` }}
+                          className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-gradient-to-r from-green-500 to-emerald-600 transition-all duration-300"
+                        ></div>
+                      </div>
+                      <p className="text-center text-sm font-semibold text-gray-700 mt-2">
+                        {uploadProgress}%
+                      </p>
+                    </div>
+
+                    {/* Tips while waiting */}
+                    <div className="mt-6 bg-blue-50 rounded-lg p-4">
+                      <p className="text-xs text-blue-800 text-center">
+                        💡 Tip: Pastikan pencahayaan baik untuk hasil terbaik
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Step 1: Form */}
               {step === 1 && (
                 <div className="space-y-6">
@@ -291,18 +449,19 @@ const Register = () => {
                     disabled={isLoading}
                     className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
                   >
-                    {isLoading ? "Memproses..." : "Lanjut ke Scan Wajah"}
+                    {isLoading ? "Memproses..." : "Lanjut ke Scan Wajah 🎥"}
                   </button>
                 </div>
               )}
 
-              {/* Step 2: Camera */}
+              {/* Step 2: Video Scan */}
               {step === 2 && (
                 <div className="space-y-6">
                   <div className="flex items-center justify-between mb-6">
                     <button
                       onClick={handleBack}
-                      className="flex items-center text-green-600 hover:text-green-700 font-medium"
+                      disabled={isLoading}
+                      className="flex items-center text-green-600 hover:text-green-700 font-medium disabled:opacity-50"
                     >
                       <svg
                         className="w-5 h-5 mr-1"
@@ -331,135 +490,10 @@ const Register = () => {
                     </div>
                   </div>
 
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-500 rounded-lg p-4 mb-6">
-                    <div className="flex items-start">
-                      <svg
-                        className="w-6 h-6 text-blue-500 mr-3 flex-shrink-0 mt-0.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                      <div>
-                        <p className="font-semibold text-blue-900 mb-1">
-                          Tips Foto untuk Akurasi Maksimal:
-                        </p>
-                        <ul className="text-sm text-blue-800 space-y-1">
-                          <li>
-                            • <strong>Pencahayaan:</strong> Pastikan wajah
-                            terang dan merata
-                          </li>
-                          <li>
-                            • <strong>Posisi:</strong> Wajah menghadap kamera
-                            langsung
-                          </li>
-                          <li>
-                            • <strong>Jarak:</strong> 30-50cm dari kamera (tidak
-                            terlalu dekat/jauh)
-                          </li>
-                          <li>
-                            • <strong>Variasi:</strong> Ambil dari sudut sedikit
-                            berbeda (kiri, depan, kanan)
-                          </li>
-                          <li>
-                            • <strong>Ekspresi:</strong> Netral dan natural
-                          </li>
-                          <li>
-                            • <strong>Minimal:</strong> {MIN_PHOTOS} foto
-                            berbeda untuk hasil terbaik
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mb-6">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-lg font-semibold text-gray-800">
-                        Scan Wajah
-                      </h3>
-                      <span
-                        className={`px-3 py-1 rounded-full text-sm font-medium ${
-                          capturedImages.length >= MIN_PHOTOS
-                            ? "bg-green-100 text-green-700"
-                            : "bg-yellow-100 text-yellow-700"
-                        }`}
-                      >
-                        {capturedImages.length} / {MIN_PHOTOS} foto
-                      </span>
-                    </div>
-
-                    {showCamera && (
-                      <Camera onCapture={handleCapture} countdown={3} />
-                    )}
-                  </div>
-
-                  {capturedImages.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-800 mb-3">
-                        Foto Terkumpul
-                      </h3>
-                      <div className="grid grid-cols-3 gap-4">
-                        {capturedImages.map((img, index) => (
-                          <div key={index} className="relative group">
-                            <img
-                              src={img}
-                              alt={`Capture ${index + 1}`}
-                              className="w-full h-32 object-cover rounded-lg shadow-md"
-                            />
-                            <button
-                              onClick={() => handleRemoveImage(index)}
-                              className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-7 h-7 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
-                            >
-                              ×
-                            </button>
-                            <div className="absolute bottom-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded">
-                              #{index + 1}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={handleSubmit}
-                    disabled={capturedImages.length < MIN_PHOTOS || isLoading}
-                    className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-                  >
-                    {isLoading ? (
-                      <span className="flex items-center justify-center">
-                        <svg
-                          className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          ></circle>
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          ></path>
-                        </svg>
-                        Memproses...
-                      </span>
-                    ) : (
-                      `Simpan & Daftar (${capturedImages.length}/${MIN_PHOTOS})`
-                    )}
-                  </button>
+                  <VideoRegistration
+                    onComplete={handleVideoComplete}
+                    onBack={handleBack}
+                  />
                 </div>
               )}
             </div>

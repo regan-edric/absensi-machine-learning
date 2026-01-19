@@ -10,3 +10,5 @@ Pillow==10.1.0
 python-dotenv==1.0.0
 requests==2.31.0
 cmake==3.27.0
+deepface==0.0.96
+tensorflow==2.20.0

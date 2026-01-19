@@ -4,6 +4,7 @@ from config import Config
 from models import Database, UserModel, FaceEncodingModel, AttendanceModel
 from utils.face_recognition import FaceRecognitionHandler
 from utils.n8n_webhook import N8NWebhook
+from utils.emotion_detector import EmotionDetector
 from datetime import datetime
 
 app = Flask(__name__)
@@ -13,6 +14,7 @@ app.config.from_object(Config)
 # Initialize handlers
 face_handler = FaceRecognitionHandler()
 n8n_webhook = N8NWebhook()
+emotion_detector = EmotionDetector()
 
 def get_db():
     db = Database()
@@ -49,9 +51,8 @@ def register_user():
         data = request.get_json()
         nama = data.get('nama')
         nim = data.get('nim')
-        images = data.get('images', [])  # Array of base64 images
+        images = data.get('images', [])
         
-        # Validation
         if not nama or not nim:
             return jsonify({'error': 'Nama dan NIM harus diisi'}), 400
         
@@ -62,12 +63,10 @@ def register_user():
         user_model = UserModel(db)
         face_model = FaceEncodingModel(db)
         
-        # Check if NIM exists
         if user_model.check_nim_exists(nim):
             db.close()
             return jsonify({'error': 'NIM sudah terdaftar'}), 400
         
-        # Process images and extract encodings
         encodings = face_handler.process_multiple_images(images)
         
         if len(encodings) < Config.MIN_FACE_ENCODINGS:
@@ -76,14 +75,12 @@ def register_user():
                 'error': f'Hanya {len(encodings)} foto valid dari {len(images)}. Minimal {Config.MIN_FACE_ENCODINGS} foto diperlukan'
             }), 400
         
-        # Create user
         user = user_model.create_user(nama, nim)
         
         if not user:
             db.close()
             return jsonify({'error': 'Gagal membuat user'}), 500
         
-        # Save face encodings
         for encoding in encodings:
             face_model.save_encoding(user['id'], encoding)
         
@@ -108,10 +105,10 @@ def register_user():
 
 @app.route('/api/attendance/check', methods=['POST'])
 def check_attendance():
-    """Check attendance using face recognition"""
+    """Check attendance using face recognition + emotion detection"""
     try:
         data = request.get_json()
-        image = data.get('image')  # Base64 image
+        image = data.get('image')
         
         if not image:
             return jsonify({'error': 'Image is required'}), 400
@@ -133,6 +130,10 @@ def check_attendance():
         if error:
             return jsonify({'error': error}), 400
         
+        # Detect emotion
+        emotion, emotion_confidence, emoji, emotion_indonesian = emotion_detector.detect_emotion(img_array)
+        emotion_color = emotion_detector.get_emotion_color(emotion)
+        
         # Get all known encodings from database
         db = get_db()
         face_model = FaceEncodingModel(db)
@@ -150,7 +151,14 @@ def check_attendance():
             return jsonify({
                 'recognized': False,
                 'message': 'Wajah tidak dikenali',
-                'confidence': float(confidence)
+                'confidence': float(confidence),
+                'emotion': {
+                    'detected': emotion,
+                    'indonesian': emotion_indonesian,
+                    'emoji': emoji,
+                    'confidence': float(emotion_confidence),
+                    'color': emotion_color
+                }
             }), 200
         
         # Check if already recorded today
@@ -167,14 +175,24 @@ def check_attendance():
                     'nama': user_data['nama'],
                     'nim': user_data['nim']
                 },
-                'last_attendance': today_attendance[0]['timestamp'].isoformat() if isinstance(today_attendance[0]['timestamp'], datetime) else str(today_attendance[0]['timestamp'])
+                'last_attendance': today_attendance[0]['timestamp'].isoformat() if isinstance(today_attendance[0]['timestamp'], datetime) else str(today_attendance[0]['timestamp']),
+                'emotion': {
+                    'detected': emotion,
+                    'indonesian': emotion_indonesian,
+                    'emoji': emoji,
+                    'confidence': float(emotion_confidence),
+                    'color': emotion_color
+                }
             }), 200
         
-        # Record attendance
+        # Record attendance WITH MOOD
         attendance_record = attendance_model.record_attendance(
             user_data['user_id'],
-            float(confidence),  # Convert numpy.float64 to Python float
-            'hadir'
+            float(confidence),
+            'hadir',
+            emotion,
+            float(emotion_confidence),
+            emoji
         )
         
         db.close()
@@ -195,8 +213,15 @@ def check_attendance():
             },
             'attendance': {
                 'timestamp': attendance_record['timestamp'].isoformat() if isinstance(attendance_record['timestamp'], datetime) else str(attendance_record['timestamp']),
-                'confidence': float(confidence),  # Also convert here
+                'confidence': float(confidence),
                 'status': attendance_record['status']
+            },
+            'emotion': {
+                'detected': emotion,
+                'indonesian': emotion_indonesian,
+                'emoji': emoji,
+                'confidence': float(emotion_confidence),
+                'color': emotion_color
             },
             'notification': {
                 'sent': n8n_success,
@@ -206,6 +231,8 @@ def check_attendance():
         
     except Exception as e:
         print(f"Attendance check error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 # ============= UTILITY ROUTES =============
@@ -250,14 +277,12 @@ def delete_user(user_id):
         db = get_db()
         user_model = UserModel(db)
         
-        # Get user info before delete
         user = user_model.get_user_by_id(user_id)
         
         if not user:
             db.close()
             return jsonify({'error': 'User tidak ditemukan'}), 404
         
-        # Delete user
         deleted = user_model.delete_user(user_id)
         
         db.close()

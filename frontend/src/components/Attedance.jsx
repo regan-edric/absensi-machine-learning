@@ -15,10 +15,38 @@ const Attendance = () => {
     width: 1280,
     height: 720,
     facingMode: "user",
+    // deviceId: {
+    //   exact: "2c65ba64799d47172376520d16dd51083830365f708105ff115ffbdeb55f03c9",
+    // },
   };
 
   const handleUserMedia = () => {
     setIsCameraReady(true);
+  };
+
+  // Voice Announcement Function
+  const speakAnnouncement = (name, time) => {
+    // Check if browser supports speech synthesis
+    if ("speechSynthesis" in window) {
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance();
+      utterance.text = `Selamat datang ${name}, pukul ${time}`;
+      utterance.lang = "id-ID"; // Indonesian
+      utterance.rate = 0.9; // Slightly slower for clarity
+      utterance.pitch = 1;
+      utterance.volume = 1;
+
+      // Try to get Indonesian voice
+      const voices = window.speechSynthesis.getVoices();
+      const indonesianVoice = voices.find((voice) => voice.lang === "id-ID");
+      if (indonesianVoice) {
+        utterance.voice = indonesianVoice;
+      }
+
+      window.speechSynthesis.speak(utterance);
+    }
   };
 
   const handleCheckAttendance = useCallback(async () => {
@@ -45,6 +73,14 @@ const Attendance = () => {
       setResult(response);
 
       if (response.recognized && !response.already_recorded) {
+        // Success - Voice Announcement
+        const now = new Date();
+        const timeString = now.toLocaleTimeString("id-ID", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+
+        speakAnnouncement(response.user.nama, timeString);
         toast.success(`Selamat datang, ${response.user.nama}!`);
       } else if (response.already_recorded) {
         toast.error(response.message);
@@ -166,7 +202,8 @@ const Attendance = () => {
                         </li>
                         <li>• Pencahayaan harus cukup dan merata</li>
                         <li>• Lepaskan masker atau kacamata hitam</li>
-                        <li>• Klik tombol "Mulai Absensi" untuk memulai</li>
+                        <li>• Ekspresi wajah Anda akan terdeteksi</li>
+                        <li>• Suara pengumuman akan diputar saat berhasil</li>
                       </ul>
                     </div>
                   </div>
@@ -247,6 +284,31 @@ const Attendance = () => {
                       Absensi Berhasil!
                     </h3>
 
+                    {/* Mood Display */}
+                    {result.emotion && (
+                      <div className="mb-6 text-center">
+                        <div
+                          className="inline-block px-6 py-3 rounded-2xl shadow-lg"
+                          style={{
+                            backgroundColor: result.emotion.color + "20",
+                          }}
+                        >
+                          <div className="text-5xl mb-2">
+                            {result.emotion.emoji}
+                          </div>
+                          <p
+                            className="text-lg font-bold"
+                            style={{ color: result.emotion.color }}
+                          >
+                            {result.emotion.indonesian}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Confidence: {result.emotion.confidence.toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="bg-white rounded-xl p-6 space-y-4 shadow-md">
                       <div className="flex items-center justify-between py-3 border-b border-gray-200">
                         <span className="text-gray-600 font-medium">Nama</span>
@@ -264,7 +326,7 @@ const Attendance = () => {
                         <span className="text-gray-600 font-medium">Waktu</span>
                         <span className="text-gray-900 font-bold">
                           {new Date(result.attendance.timestamp).toLocaleString(
-                            "id-ID"
+                            "id-ID",
                           )}
                         </span>
                       </div>
@@ -281,7 +343,7 @@ const Attendance = () => {
                           Confidence
                         </span>
                         <span className="text-gray-900 font-bold">
-                          {(result.attendance.confidence * 100).toFixed(1)}%
+                          {result.attendance.confidence.toFixed(1)}%
                         </span>
                       </div>
                     </div>
@@ -313,113 +375,46 @@ const Attendance = () => {
                   </div>
                 )}
 
-                {/* Already Recorded Result */}
+                {/* Already Recorded or Not Recognized - same as before but add emotion */}
                 {result.already_recorded && (
                   <div className="bg-gradient-to-br from-yellow-50 to-amber-50 border-2 border-yellow-500 rounded-2xl p-8">
-                    <div className="flex items-center justify-center mb-6">
-                      <div className="w-20 h-20 bg-gradient-to-br from-yellow-400 to-amber-600 rounded-full flex items-center justify-center shadow-lg">
-                        <svg
-                          className="w-10 h-10 text-white"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                          />
-                        </svg>
+                    {result.emotion && (
+                      <div className="mb-6 text-center">
+                        <div className="text-5xl mb-2">
+                          {result.emotion.emoji}
+                        </div>
+                        <p className="text-lg font-bold text-yellow-800">
+                          Mood: {result.emotion.indonesian}
+                        </p>
                       </div>
-                    </div>
-
+                    )}
                     <h3 className="text-3xl font-bold text-yellow-800 text-center mb-4">
                       Sudah Absen Hari Ini
                     </h3>
                     <p className="text-yellow-700 text-center mb-6">
                       {result.message}
                     </p>
-
-                    <div className="bg-white rounded-xl p-6 space-y-3 shadow-md">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Nama</span>
-                        <span className="text-gray-900 font-bold">
-                          {result.user.nama}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">NIM</span>
-                        <span className="text-gray-900 font-bold">
-                          {result.user.nim}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Waktu Absen</span>
-                        <span className="text-gray-900 font-bold">
-                          {new Date(result.last_attendance).toLocaleString(
-                            "id-ID"
-                          )}
-                        </span>
-                      </div>
-                    </div>
                   </div>
                 )}
 
-                {/* Not Recognized Result */}
                 {!result.recognized && (
                   <div className="bg-gradient-to-br from-red-50 to-rose-50 border-2 border-red-500 rounded-2xl p-8">
-                    <div className="flex items-center justify-center mb-6">
-                      <div className="w-20 h-20 bg-gradient-to-br from-red-400 to-rose-600 rounded-full flex items-center justify-center shadow-lg">
-                        <svg
-                          className="w-10 h-10 text-white"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
+                    {result.emotion && (
+                      <div className="mb-6 text-center">
+                        <div className="text-5xl mb-2">
+                          {result.emotion.emoji}
+                        </div>
+                        <p className="text-sm text-gray-600">
+                          Mood terdeteksi: {result.emotion.indonesian}
+                        </p>
                       </div>
-                    </div>
-
+                    )}
                     <h3 className="text-3xl font-bold text-red-800 text-center mb-4">
                       Wajah Tidak Dikenali
                     </h3>
                     <p className="text-red-700 text-center mb-6">
                       {result.message}
                     </p>
-
-                    <div className="bg-white rounded-xl p-6 shadow-md">
-                      <p className="text-gray-700 mb-4">
-                        Kemungkinan penyebab:
-                      </p>
-                      <ul className="space-y-2 text-gray-600">
-                        <li className="flex items-start">
-                          <span className="text-red-500 mr-2">•</span>
-                          <span>Anda belum terdaftar dalam sistem</span>
-                        </li>
-                        <li className="flex items-start">
-                          <span className="text-red-500 mr-2">•</span>
-                          <span>Pencahayaan kurang baik</span>
-                        </li>
-                        <li className="flex items-start">
-                          <span className="text-red-500 mr-2">•</span>
-                          <span>Wajah tidak terlihat jelas</span>
-                        </li>
-                      </ul>
-
-                      <button
-                        onClick={() => navigate("/register")}
-                        className="w-full mt-6 bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-lg transition-all"
-                      >
-                        Daftar Sekarang
-                      </button>
-                    </div>
                   </div>
                 )}
 
