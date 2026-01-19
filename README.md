@@ -35,4 +35,4 @@ npm install n8n -g
 n8n start
 
 Link Onedrive: https://mikroskilacid-my.sharepoint.com/:f:/g/personal/221110891_students_mikroskil_ac_id/IgD6ghtPNHt1T5JmFMGfXLTCAWcNxNpWatdVnmHpxdYebxw?e=lBKtxK
-Link Youtube: https://youtu.be/DuPkJx4p8UQ
+Link Youtube: https://youtu.be/X2mZBmCBFig
